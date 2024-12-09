@@ -20,8 +20,8 @@ public class DormakabaConnector implements Connector,
         UpdateDeltaOp, SchemaOp, TestOp, SearchOp<URIFilter> {
 
     private static final Log LOG = Log.getLog(DormakabaConnector.class);
-    private static final String ATTRIBUTE_MATNR_NAME = "matrikelNummer";
-    private static final ObjectClass OBJECT_CLASS_DOORACCESSRIGHT = new ObjectClass("DoorAccessRight");
+    public static final String ATTRIBUTE_MATNR_NAME = "matrikelNummer";
+    public static final ObjectClass OBJECT_CLASS_DOORACCESSRIGHT = new ObjectClass("DoorAccessRight");
     public static final String ATTRIBUTE_ACCESSRIGHTS_NAME = "accessRights";
 
     private DormakabaConnectorConfiguration configuration;
@@ -35,7 +35,7 @@ public class DormakabaConnector implements Connector,
 
     @Override
     public void init(final Configuration configuration) {
-        DormakabaConnectorConfiguration config = (DormakabaConnectorConfiguration) configuration
+        DormakabaConnectorConfiguration config = (DormakabaConnectorConfiguration) configuration;
         this.configuration = config;
         this.exosClient = new DormakabaExosClient(config.getExosEndpointProperty(), config.getExosUsernameProperty(), config.getExosPasswordProperty());
         LOG.ok("Connector {0} successfully inited", getClass().getName());
@@ -113,7 +113,7 @@ public class DormakabaConnector implements Connector,
             }
 
             protected URIFilter createEqualsExpression(EqualsFilter filter, boolean not) {
-                if(filter.getAttribute().getValue().size() != 1) return null;
+                if (filter.getAttribute().getValue().size() != 1) return null;
                 String fieldName;
 
                 String name = filter.getName();
@@ -143,28 +143,45 @@ public class DormakabaConnector implements Connector,
             final ResultsHandler handler,
             final OperationOptions options) {
 
-        if (objectClass.equals(ObjectClass.ACCOUNT) || objectClass.equals(ObjectClass.ALL)) {
-            boolean includeAccessRights = Arrays.asList(options.getAttributesToGet()).contains(ATTRIBUTE_ACCESSRIGHTS_NAME);
+        int pageSize = 50;
+        if (options.getPageSize() != null) {
+            pageSize = options.getPageSize();
+        }
 
-            final Stream<DormakabaExosClient.Employee> employees = exosClient.listEmployees(query, includeAccessRights, options.getPagedResultsOffset(), options.getPageSize());
+        int offset = 0;
+        if (options.getPagedResultsOffset() != null) {
+            offset = options.getPagedResultsOffset();
+        }
+
+        if (objectClass.equals(ObjectClass.ACCOUNT) || objectClass.equals(ObjectClass.ALL)) {
+            boolean includeAccessRights;
+            if (options.getAttributesToGet() != null) {
+                includeAccessRights = Arrays.asList(options.getAttributesToGet()).contains(ATTRIBUTE_ACCESSRIGHTS_NAME);
+            } else {
+                includeAccessRights = false;
+            }
+
+            final Stream<DormakabaExosClient.Employee> employees = exosClient.listEmployees(query, includeAccessRights, offset, pageSize);
 
             employees.forEach(employee -> {
                 final HashSet<Attribute> attributes = new HashSet<>();
                 attributes.add(AttributeBuilder.build(Uid.NAME, employee.getPersonId()));
                 attributes.add(new Name(employee.getPersonId()));
                 attributes.add(AttributeBuilder.build(ATTRIBUTE_MATNR_NAME, employee.getMatrikelNumber()));
-                attributes.add(AttributeBuilder.build(ATTRIBUTE_ACCESSRIGHTS_NAME,
-                        employee.getAccessRightAssigments().stream()
-                                .map(accessRightReference -> new ConnectorObjectReference(new ConnectorObjectIdentification(OBJECT_CLASS_DOORACCESSRIGHT,
-                                        Collections.singleton(AttributeBuilder.build(Uid.NAME, accessRightReference.getAccessRightId())))))
-                                .collect(Collectors.toList())
-                ));
+                if (includeAccessRights) {
+                    attributes.add(AttributeBuilder.build(ATTRIBUTE_ACCESSRIGHTS_NAME,
+                            employee.getAssignedAccessRightIds().stream()
+                                    .map(accessRightId -> new ConnectorObjectReference(new ConnectorObjectIdentification(OBJECT_CLASS_DOORACCESSRIGHT,
+                                            Collections.singleton(AttributeBuilder.build(Uid.NAME, accessRightId)))))
+                                    .collect(Collectors.toList())
+                    ));
+                }
 
                 handler.handle(new ConnectorObject(OBJECT_CLASS_DOORACCESSRIGHT, attributes));
             });
         }
         if (objectClass.equals(OBJECT_CLASS_DOORACCESSRIGHT) || objectClass.equals(ObjectClass.ALL)) {
-            final Stream<DormakabaExosClient.AccessRight> accessRights = exosClient.listAccessRights(query, options.getPagedResultsOffset(), options.getPageSize());
+            final Stream<DormakabaExosClient.AccessRight> accessRights = exosClient.listAccessRights(query, offset, pageSize);
             accessRights.forEach(accessRight -> {
                 final HashSet<Attribute> attributes = new HashSet<>();
                 attributes.add(AttributeBuilder.build(Uid.NAME, accessRight.getAccessRightId()));
