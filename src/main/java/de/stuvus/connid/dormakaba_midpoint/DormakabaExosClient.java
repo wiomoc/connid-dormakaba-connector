@@ -174,7 +174,6 @@ public class DormakabaExosClient {
     }
 
     public List<AccessRightAssignment> listAssignedAccessRights(String personId, int skip, int limit) {
-
         ODataRetrieveRequest<ClientEntitySet> request = client.getRetrieveRequestFactory().getEntitySetRequest(client.newURIBuilder(baseApiUri)
                 .appendEntitySetSegment("accessRightAssignments")
                 .addCustomQueryOption("personId", personId)

@@ -19,4 +19,17 @@
     </fileSet>
   </fileSets>
 
+  <dependencySets>
+    <dependencySet>
+      <outputDirectory>/</outputDirectory>
+      <useProjectArtifact>true</useProjectArtifact>
+      <unpack>true</unpack>
+      <scope>runtime</scope>
+      <excludes>
+        <exclude>net.tirasa.connid:connector-framework</exclude>
+        <exclude>net.tirasa.connid:connector-framework-internal</exclude>
+      </excludes>
+    </dependencySet>
+  </dependencySets>
+
 </assembly>

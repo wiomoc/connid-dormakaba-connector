@@ -11,8 +11,7 @@ public class DormakabaConnectorConfiguration extends AbstractConfiguration {
     private String exosUsernameProperty = "";
     private String exosPasswordProperty = "";
 
-    @ConfigurationProperty(displayMessageKey = "property.exosEndpoint.display",
-            helpMessageKey = "property.exosEndpoint.help", order = 1)
+    @ConfigurationProperty(displayMessageKey = "property.exosEndpoint.display", order = 1)
     public String getExosEndpointProperty() {
         return exosEndpointProperty;
     }
@@ -23,8 +22,7 @@ public class DormakabaConnectorConfiguration extends AbstractConfiguration {
     }
 
 
-    @ConfigurationProperty(displayMessageKey = "property.exosUsername.display",
-            helpMessageKey = "property.exosUsername.help", order = 1)
+    @ConfigurationProperty(displayMessageKey = "property.exosUsername.display", order = 2)
 
     public String getExosUsernameProperty() {
         return exosUsernameProperty;
@@ -35,8 +33,7 @@ public class DormakabaConnectorConfiguration extends AbstractConfiguration {
     }
 
 
-    @ConfigurationProperty(displayMessageKey = "property.exosPassword.display",
-            helpMessageKey = "property.exosPassword.help", order = 1)
+    @ConfigurationProperty(displayMessageKey = "property.exosPassword.display", order = 3, confidential = true)
     public String getExosPasswordProperty() {
         return exosPasswordProperty;
     }

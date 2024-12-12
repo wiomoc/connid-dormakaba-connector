@@ -12,7 +12,7 @@
 
     <groupId>de.stuvus</groupId>
     <artifactId>dormakaba-connector</artifactId>
-    <version>1.3-SNAPSHOT</version>
+    <version>1.16-SNAPSHOT</version>
     <name>Dormakaba Connector</name>
     <packaging>jar</packaging>
 
@@ -39,6 +39,7 @@
             <groupId>org.apache.olingo</groupId>
             <artifactId>odata-client-core</artifactId>
             <version>5.0.0</version>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>commons-logging</groupId>

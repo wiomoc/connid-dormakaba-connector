@@ -1,6 +1,8 @@
 package de.stuvus.connid.dormakaba_midpoint;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -68,9 +70,7 @@ public class DormakabaConnector implements Connector,
                                 .setUpdateable(false)
                                 .setReadable(true)
                                 .build())
-                        .addAttributeInfo(new AttributeInfoBuilder(ATTRIBUTE_ACCESSRIGHTS_NAME, ConnectorObjectReference.class)
-                                .setReferencedObjectClassName(OBJECT_CLASS_DOORACCESSRIGHT.getObjectClassValue())
-                                .setRoleInReference(AttributeUtil.createSpecialName("SUBJECT"))
+                        .addAttributeInfo(new AttributeInfoBuilder(ATTRIBUTE_ACCESSRIGHTS_NAME, String.class)
                                 .setCreateable(false)
                                 .setUpdateable(true)
                                 .setReadable(true)
@@ -136,63 +136,78 @@ public class DormakabaConnector implements Connector,
         };
     }
 
+    private void paginatedHandler(BiFunction<Integer, Integer, Stream<ConnectorObject>> fetchFunction,
+                                  ResultsHandler resultsHandler,
+                                  Integer pageSize,
+                                  Integer pageOffset) {
+
+        if (pageSize == null) {
+            pageSize = 80;
+        }
+        if (pageOffset == null) {
+            pageOffset = 0;
+        }
+        AtomicBoolean stopped = new AtomicBoolean(false);
+
+        while (!stopped.get()) {
+            fetchFunction.apply(pageSize, pageOffset)
+                    .takeWhile(connectorObject -> !stopped.get())
+                    .forEach(connectorObject -> stopped.set(!resultsHandler.handle(connectorObject)));
+            pageOffset += pageSize;
+        }
+    }
+
     @Override
     public void executeQuery(
             final ObjectClass objectClass,
             final URIFilter query,
             final ResultsHandler handler,
             final OperationOptions options) {
-
-        int pageSize = 50;
-        if (options.getPageSize() != null) {
-            pageSize = options.getPageSize();
-        }
-
-        int offset = 0;
-        if (options.getPagedResultsOffset() != null) {
-            offset = options.getPagedResultsOffset();
-        }
+        Integer pageSize = options.getPageSize();
+        Integer offset = options.getPagedResultsOffset();
 
         if (objectClass.equals(ObjectClass.ACCOUNT) || objectClass.equals(ObjectClass.ALL)) {
             boolean includeAccessRights;
             if (options.getAttributesToGet() != null) {
                 includeAccessRights = Arrays.asList(options.getAttributesToGet()).contains(ATTRIBUTE_ACCESSRIGHTS_NAME);
             } else {
-                includeAccessRights = false;
+                includeAccessRights = true;
             }
 
-            final Stream<DormakabaExosClient.Employee> employees = exosClient.listEmployees(query, includeAccessRights, offset, pageSize);
+            paginatedHandler(
+                    (Integer pSize, Integer pageOffset) -> exosClient.listEmployees(query, includeAccessRights, pageOffset, pSize)
+                            .map(employee -> {
+                                final HashSet<Attribute> attributes = new HashSet<>();
+                                attributes.add(AttributeBuilder.build(Uid.NAME, employee.getPersonId()));
+                                attributes.add(new Name(employee.getPersonId()));
+                                attributes.add(AttributeBuilder.build(ATTRIBUTE_MATNR_NAME, employee.getMatrikelNumber()));
+                                if (includeAccessRights) {
+                                    attributes.add(AttributeBuilder.build(ATTRIBUTE_ACCESSRIGHTS_NAME, employee.getAssignedAccessRightIds()));
+                                }
 
-            employees.forEach(employee -> {
-                final HashSet<Attribute> attributes = new HashSet<>();
-                attributes.add(AttributeBuilder.build(Uid.NAME, employee.getPersonId()));
-                attributes.add(new Name(employee.getPersonId()));
-                attributes.add(AttributeBuilder.build(ATTRIBUTE_MATNR_NAME, employee.getMatrikelNumber()));
-                if (includeAccessRights) {
-                    attributes.add(AttributeBuilder.build(ATTRIBUTE_ACCESSRIGHTS_NAME,
-                            employee.getAssignedAccessRightIds().stream()
-                                    .map(accessRightId -> new ConnectorObjectReference(new ConnectorObjectIdentification(OBJECT_CLASS_DOORACCESSRIGHT,
-                                            Collections.singleton(AttributeBuilder.build(Uid.NAME, accessRightId)))))
-                                    .collect(Collectors.toList())
-                    ));
-                }
-
-                handler.handle(new ConnectorObject(OBJECT_CLASS_DOORACCESSRIGHT, attributes));
-            });
+                                return new ConnectorObject(OBJECT_CLASS_DOORACCESSRIGHT, attributes);
+                            }),
+                    handler, pageSize, offset);
         }
         if (objectClass.equals(OBJECT_CLASS_DOORACCESSRIGHT) || objectClass.equals(ObjectClass.ALL)) {
-            final Stream<DormakabaExosClient.AccessRight> accessRights = exosClient.listAccessRights(query, offset, pageSize);
-            accessRights.forEach(accessRight -> {
-                final HashSet<Attribute> attributes = new HashSet<>();
-                attributes.add(AttributeBuilder.build(Uid.NAME, accessRight.getAccessRightId()));
-                attributes.add(new Name(accessRight.getAccessRightId()));
-                handler.handle(new ConnectorObject(OBJECT_CLASS_DOORACCESSRIGHT, attributes));
-            });
+            paginatedHandler(
+                    (Integer pSize, Integer pageOffset) -> exosClient.listAccessRights(query, pageOffset, pSize)
+                            .map(accessRight -> {
+                                final HashSet<Attribute> attributes = new HashSet<>();
+                                attributes.add(AttributeBuilder.build(Uid.NAME, accessRight.getAccessRightId()));
+                                attributes.add(new Name(accessRight.getName()));
+                                return new ConnectorObject(OBJECT_CLASS_DOORACCESSRIGHT, attributes);
+                            }),
+                    handler, pageSize, offset);
         }
     }
 
     @Override
     public Set<AttributeDelta> updateDelta(ObjectClass objectClass, Uid uid, Set<AttributeDelta> set, OperationOptions operationOptions) {
+        System.out.println("Update Delta");
+        System.out.println(objectClass);
+        System.out.println(uid);
+        System.out.println(set);
         if (!objectClass.equals(ObjectClass.ACCOUNT))
             throw new InvalidAttributeValueException();
         if (set.size() > 1)
